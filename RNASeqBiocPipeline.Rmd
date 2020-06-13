@@ -48,17 +48,29 @@ if(!require(ggbeeswarm)) install.packages("ggbeeswarm", dep=TRUE)
 
 This document contains a RNA-seq case study based in a related workflow that can be found in Bioconductor's web siate: http://master.bioconductor.org/packages/release/workflows/vignettes/rnaseqGene/inst/doc/rnaseqGene.html#aligning-reads-to-a-reference-genome.
 
+The workflow follows the standard steps for RNAseq analysis as described in the figure below extracted from DOI: 10.1186/s12864-015-1876-7,
+
+```{r RNAseqPipeline, fig.cap="A A standard RNAseq workflow", echo=FALSE}
+knitr::include_graphics("figures/Workflow-for-RNA-seq-data-analysis.png")
+```
+
+AN important thing is to remember that it is relatively common not to go through all the workflow but, instead, start from the counts table resulting from the _gene quantification step_.
+
 ## 2. Data 
 
-The `airway` package contains eight files with a small subset of the total number of reads in the experiment. We have selected a subset of reads because the full alignment files are large (a few gigabytes each), and because it takes between 10-30 minutes to count the fragments for each sample. We will use these files to demonstrate how a count matrix can be constructed from BAM files:
+THis use case relies on the data available in th e `airway` package. It consists of eight files with a small subset of the total number of reads in the experiment. We have selected a subset of reads because the full alignment files are large (a few gigabytes each), and because it takes between 10-30 minutes to count the fragments for each sample. We will use these files to demonstrate how a count matrix can be constructed from BAM files.
 
+Reads from each sample are provided as .bam files.
 ```{r message=FALSE}
 library("airway")
-
 #to find out where on your computer the files from a package have been installed.
 indir <- system.file("extdata", package="airway", mustWork=TRUE)
 list.files(indir)
+```
 
+Additionally a targets file is provided with informartion on groups and on sequencing process,
+
+```{r message=FALSE}
 #read the targets file of the experiment
 csvfile <- file.path(indir, "sample_table.csv")
 sampleTable <- read.csv(csvfile, row.names = 1)
@@ -122,7 +134,7 @@ ebg
 
 ### 3.3 Read counting step
 
-The function summarizeOverlaps from the GenomicAlignments package will perform the counting step. This produces a SummarizedExperiment object that contains a variety of information about the experiment, and will be described in more detail below.
+The function `summarizeOverlaps` from the `GenomicAlignments` package will perform the counting step. This produces a SummarizedExperiment object that contains a variety of information about the experiment, and will be described in more detail below.
 
 \textit{Note: If it is desired to perform counting using multiple cores, one can use the register and MulticoreParam or SnowParam functions from the BiocParallel package before the counting call below. Expect that the summarizeOverlaps call will take at least 30 minutes per file for a human RNA-seq file with 30 million aligned reads. By sending the files to separate cores, one can speed up the entire counting process.} Here we specify to use one core, not multiple cores. We could have also skipped this line and the counting step would run in serial.
 
@@ -188,13 +200,13 @@ colData(se)
 
 \textit{At this point, we have counted the fragments which overlap the genes in the gene model we specified. This is a branching point where we could use a variety of Bioconductor packages for exploration and differential expression of the count data, including edgeR (Robinson, McCarthy, and Smyth 2009), limma with the voom method (Law et al. 2014), DSS (Wu, Wang, and Wu 2013), EBSeq (Leng et al. 2013) and baySeq (Hardcastle and Kelly 2010). Schurch et al. (2016) compared performance of different statistical methods for RNA-seq using a large number of biological replicates and can help users to decide which tools make sense to use, and how many biological replicates are necessary to obtain a certain sensitivity. We will continue using DESeq2 (Love, Huber, and Anders 2014). The SummarizedExperiment object is all we need to start our analysis. In the following section we will show how to use it to create the data object used by DESeq2.}
 
-### 3.5 The DESeqDataSet object, sample information and the design formula
+### 3.5 The `DESeqDataSet` object, sample information and the design formula
 
-In DESeq2, the custom class is called DESeqDataSet. It is built on top of the SummarizedExperiment class, and it is easy to convert SummarizedExperiment objects into DESeqDataSet objects, which we show below. One of the two main differences is that the assay slot is instead accessed using the counts accessor function, and the DESeqDataSet class enforces that the values in this matrix are non-negative integers.
+In DESeq2, the custom class is called `DESeqDataSet`. It is built on top of the SummarizedExperiment class, and it is easy to convert SummarizedExperiment objects into `DESeqDataSet` objects, which we show below. One of the two main differences is that the assay slot is instead accessed using the counts accessor function, and the `DESeqDataSet` class enforces that the values in this matrix are non-negative integers.
 
-A second difference is that the DESeqDataSet has an associated design formula. The experimental design is specified at the beginning of the analysis, as it will inform many of the DESeq2 functions how to treat the samples in the analysis (one exception is the size factor estimation, i.e., the adjustment for differing library sizes, which does not depend on the design formula). The design formula tells which columns in the sample information table (colData) specify the experimental design and how these factors should be used in the analysis.
+A second difference is that the `DESeqDataSet` has an associated design formula. The experimental design is specified at the beginning of the analysis, as it will inform many of the DESeq2 functions how to treat the samples in the analysis (one exception is the size factor estimation, i.e., the adjustment for differing library sizes, which does not depend on the design formula). The design formula tells which columns in the sample information table (colData) specify the experimental design and how these factors should be used in the analysis.
 
-The simplest design formula for differential expression would be ~ condition, where  condition is a column in colData(dds) that specifies which of two (or more groups) the samples belong to. For the airway experiment, we will specify ~ cell + dex meaning that we want to test for the effect of dexamethasone (dex) controlling for the effect of different cell line (cell). We can see each of the columns just using the $ directly on the SummarizedExperiment or DESeqDataSet:
+The simplest design formula for differential expression would be ~ condition, where  condition is a column in colData(dds) that specifies which of two (or more groups) the samples belong to. For the airway experiment, we will specify ~ cell + dex meaning that we want to test for the effect of dexamethasone (dex) controlling for the effect of different cell line (cell). We can see each of the columns just using the $ directly on the SummarizedExperiment or `DESeqDataSet`:
 
 ```{r}
 se$cell
@@ -214,13 +226,13 @@ se$dex
 
 For running DESeq2 models, you can use R’s formula notation to express any fixed-effects experimental design. Note that DESeq2 uses the same formula notation as, for instance, the lm function of base R.
 
-In the following sections, we will demonstrate the construction of the DESeqDataSet from two starting points:
+In the following sections, we will demonstrate the construction of the `DESeqDataSet` from two starting points:
 \begin{itemize}
   \item from a SummarizedExperiment object
   \item from a count matrix and a sample information table
 \end{itemize}
 
-#### 3.5.1 Starting from SummarizedExperiment
+#### 3.5.1 Creating a ``DESeqDataSet`` from a `SummarizedExperiment` object.
 
 We now use R’s data command to load a prepared SummarizedExperiment that was generated from the publicly available sequencing data files associated with Himes et al. (2014), described above
 
@@ -246,18 +258,20 @@ colData(se)
 
 Here we see that this object already contains an informative colData slot – because we have already prepared it for you, as described in the airway vignette. However, when you work with your own data, you will have to add the pertinent sample / phenotypic information for the experiment at this stage. 
 
-Once we have our fully annotated SummarizedExperiment object, we can construct a DESeqDataSet object from it that will then form the starting point of the analysis. We add an appropriate design for the analysis:
+Once we have our fully annotated SummarizedExperiment object, we can construct a `DESeqDataSet` object from it that will then form the starting point of the analysis. We add an appropriate design for the analysis:
 
 ```{r message=FALSE}
 library("DESeq2")
 
-dds <- DESeqDataSet(se, design = ~ cell + dex)
+ddsSumExp <- `DESeqDataSet`(se, design = ~ cell + dex)
 ```
 
 
-#### 3.5.2 Starting from count matrices
+#### 3.5.2 Creating a ``DESeqDataSet`` from a counts table.
 
-In this section, we will show how to build an DESeqDataSet supposing we only have a count matrix and a table of sample information.
+In many situations one has to start an analysios from a counts table that has been provided to us either from a public repository or because the facility who did the sequencing has generatyed the counts.
+
+In this section, we will show how to build an `DESeqDataSet` supposing we only have a count matrix and a table of sample information.
 Here we first extract the individual object (count matrix and sample info) from the SummarizedExperiment in order to build it back up into a new object – only for demonstration purposes. In practice, the count matrix would either be read in from a file or perhaps generated by an R function like featureCounts from the Rsubread package (Liao, Smyth, and Shi 2014).
 
 ```{r}
@@ -269,6 +283,8 @@ In this count matrix, each row represents an Ensembl gene, each column a sequenc
 
 ```{r}
 coldata <- colData(se)
+class(coldata)
+sum(colnames(countdata)==rownames(coldata))
 ```
 
 We now have all the ingredients to prepare our data object in a form that is suitable for analysis, namely:
@@ -278,15 +294,21 @@ We now have all the ingredients to prepare our data object in a form that is sui
   \item \texttt{coldata}: a table with information about the samples
 \end{itemize}
 
-To now construct the DESeqDataSet object from the matrix of counts and the sample information table, we use:
+To now construct the `DESeqDataSet` object from the matrix of counts and the sample information table, we use:
 ```{r message=FALSE}
 ddsMat <- DESeqDataSetFromMatrix(countData = countdata,
-                                  colData = coldata,
-                                  design = ~ cell + dex)
-ddsMat
+                                 colData = coldata,
+                                 design = ~ cell + dex)
+class(ddsMat)
 ```
 
-We will continue with the object generated from the SummarizedExperiment section.
+In the following sections we will continue the analysis with the object generated from the `SummarizedExperiment`. Notice that we could also use the object generated from the counts matrix, but __if we did so, we wouldn't be able to do the plottings described in section *"3.8.4 Ploting fold changes in genomic space"*__ because this object does not contain a `GRanges` slot.
+
+```{r}
+dds <- ddsSumExp
+# dds <- ddsMat
+```
+
 
 ### 3.6 Exploratory analysis and visualization
 
@@ -294,7 +316,7 @@ There are two separate paths in this workflow; the one we will see first involve
 
 #### 3.6.1 Pre-filtering the dataset
 
-Our count matrix with our DESeqDataSet contains many rows with only zeros, and additionally many rows with only a few fragments total. In order to reduce the size of the object, and to increase the speed of our functions, we can remove the rows that have no or nearly no information about the amount of gene expression. Here we apply the most minimal filtering rule: removing rows of the DESeqDataSet that have no counts, or only a single count across all samples. Additional weighting/filtering to improve power is applied at a later step in the workflow.
+Our count matrix with our `DESeqDataSet` contains many rows with only zeros, and additionally many rows with only a few fragments total. In order to reduce the size of the object, and to increase the speed of our functions, we can remove the rows that have no or nearly no information about the amount of gene expression. Here we apply the most minimal filtering rule: removing rows of the `DESeqDataSet` that have no counts, or only a single count across all samples. Additional weighting/filtering to improve power is applied at a later step in the workflow.
 
 ```{r}
 nrow(dds)
@@ -404,13 +426,13 @@ ggplot(mds, aes(x = `1`, y = `2`, color = dex, shape = cell)) +
 
 ### 3.7 Differential Expression Analysis
 
-As we have already specified an experimental design when we created the DESeqDataSet, we can run the differential expression pipeline on the raw counts with a single call to the function DESeq:
+As we have already specified an experimental design when we created the `DESeqDataSet`, we can run the differential expression pipeline on the raw counts with a single call to the function DESeq:
 
 ```{r}
 dds <- DESeq(dds, parallel =TRUE)
 ```
 
-A DESeqDataSet is returned that contains all the fitted parameters within it, and the following section describes how to extract out results tables of interest from this object.
+A `DESeqDataSet` is returned that contains all the fitted parameters within it, and the following section describes how to extract out results tables of interest from this object.
 \\
 Because dex is the last variable in the design, we could optionally leave off the contrast argument to extract the comparison of the two levels of dex.
 
@@ -427,7 +449,7 @@ mcols(res, use.names = TRUE)
 
 Where:
 \begin{itemize}
-  \item \textbf{baseMean}, is a just the average of the normalized count values, divided by the size factors, taken over all samples in the DESeqDataSet
+  \item \textbf{baseMean}, is a just the average of the normalized count values, divided by the size factors, taken over all samples in the `DESeqDataSet`
   \item \textbf{log2FoldChange}, is the effect size estimate. It tells us how much the gene’s expression seems to have changed due to treatment with dexamethasone in comparison to untreated samples.
   \item \textbf{lfcSE}, the standard error estimate for the log2 fold change estimate.
   \item \textbf{padj}, DESeq2 uses the Benjamini-Hochberg (BH) adjustment (Benjamini and Hochberg 1995) as implemented in the base R p.adjust function.
@@ -486,6 +508,7 @@ head(resSig[ order(resSig$log2FoldChange, decreasing = TRUE), ])
 #### 3.7.1 Other comparisons
 
 In general, the results for a comparison of any two levels of a variable can be extracted using the  contrast argument to results. The user should specify three values: the name of the variable, the name of the level for the numerator, and the name of the level for the denominator. Here we extract results for the log2 of the fold change of one cell line over another:
+
 ```{r}
 results(dds, contrast = c("cell", "N061011", "N61311"))
 ```
@@ -497,7 +520,7 @@ If results for an interaction term are desired, the name argument of results sho
 
 #### 3.8.1 Counts plot
 
-A quick way to visualize the counts for a particular gene is to use the plotCounts function that takes as arguments the DESeqDataSet, a gene name, and the group over which to plot the counts 
+A quick way to visualize the counts for a particular gene is to use the plotCounts function that takes as arguments the `DESeqDataSet`, a gene name, and the group over which to plot the counts 
 
 ```{r message=FALSE, fig.align='center', fig.width=5, fig.height=4}
 topGene <- rownames(res)[which.min(res$padj)]
@@ -553,7 +576,9 @@ pheatmap(mat, annotation_col = anno)
 
 #### 3.8.4 Ploting fold changes in genomic space
 
-If we have used the summarizeOverlaps function to count the reads, then our DESeqDataSet object is built on top of ready-to-use Bioconductor objects specifying the genomic coordinates of the genes. We can therefore easily plot our differential expression results in genomic space. While the results function by default returns a DataFrame, using the format argument, we can ask for GRanges or GRangesList output. lfcShrink does not yet have the option to output GRanges, so we add the column of shrunken coefficients manually.
+NOTE: This section can only be performed if we have information on the position of reads in the genome. That is if we have created our `DESeqDataSet` from a `SummarizedExperiment` object and we have used the `summarizeOverlaps` function to count the reads. 
+
+In that case our `DESeqDataSet` object is built on top of ready-to-use Bioconductor objects specifying the genomic coordinates of the genes. We can therefore easily plot our differential expression results in genomic space. While the results function by default returns a `DataFrame`, using the format argument, we can ask for `GRanges` or `GRangesList` output. `lfcShrink` does not yet have the option to output `GRanges`, so we add the column of shrunken coefficients manually.
 
 ```{r}
 resGR <- results(dds, name="dex_trt_vs_untrt", format="GRanges")
@@ -628,14 +653,14 @@ head(resOrdered)
 
 #### 3.9.1 Exporting results
 
-You can easily save the results table in a CSV file:
+The results of the analysis can be written to a CSV file:
 
 ```{r}
 resOrderedDF <- as.data.frame(resOrdered)
 write.csv(resOrderedDF, file = "results2.csv")
 ```
 
-With ReportingTools:
+Alternatively a searchable, sortable html table can be created using the `ReportingTools` package:
 
 ```{r message=FALSE}
 library("ReportingTools")
@@ -648,7 +673,7 @@ browseURL(url)
 
 ### 4.0 Removing hidden batch effects
 
-We can use statistical methods designed for RNA-seq from the sva package (Leek 2014) or the RUVSeq package (Risso et al. 2014) in Bioconductor to detect such groupings of the samples, and then we can add these to the DESeqDataSet design, in order to account for them.
+We can use statistical methods designed for RNA-seq from the sva package (Leek 2014) or the RUVSeq package (Risso et al. 2014) in Bioconductor to detect such groupings of the samples, and then we can add these to the `DESeqDataSet` design, in order to account for them.
 
 The SVA package uses the term surrogate variables for the estimated variables that we want to account for in our analysis, while the RUV package uses the terms factors of unwanted variation with the acronym “Remove Unwanted Variation” explaining the package title. We first use SVA to find hidden batch effects and then RUV following.
 
@@ -681,7 +706,7 @@ for (i in 1:2) {
 
 Here, we know the hidden source of variation (cell line), and therefore can see how the SVA procedure is able to identify a source of variation which is correlated with cell line.
 
-Finally, in order to use SVA to remove any effect on the counts from our surrogate variables, we simply add these two surrogate variables as columns to the DESeqDataSet and then add them to the design:
+Finally, in order to use SVA to remove any effect on the counts from our surrogate variables, we simply add these two surrogate variables as columns to the `DESeqDataSet` and then add them to the design:
 
 ```{r}
 ddssva <- dds
@@ -719,7 +744,7 @@ for (i in 1:2) {
  }
 ```
 
-As before, if we wanted to control for these factors, we simply add them to the DESeqDataSet and to the design:
+As before, if we wanted to control for these factors, we would simply add them to the `DESeqDataSet` and to the design:
 
 ```{r}
 ddsruv <- dds
